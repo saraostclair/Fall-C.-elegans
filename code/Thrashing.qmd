@@ -9,6 +9,9 @@ rm(list = ls())
 library(tidyverse)
 library(readxl)
 library(ggplot2)
+library(ggsignif)
+library(knitr)
+library(broom)
 thrashing <- read_excel("data/thrashing_assay.xlsx")
 
 #view structure of each column
@@ -18,7 +21,10 @@ str(thrashing)
 ```{r}
 #create per minute stat for each worm
 thrash<- thrashing |>
-  mutate(perMinute = ((trial1 + trial2 + trial3)/3)*2)
+  mutate(perMinute = ((trial1 + trial2 + trial3)/3)*2) |>
+  mutate(treatment = recode(treatment,
+                            "blue" = "Control",
+                            "orange" = "Mannitol"))
 ```
 
 ```{r}
@@ -35,6 +41,24 @@ summaryThrash<- thrash |>
 #plot results
 ggplot(summaryThrash, aes( x = day, y = meanThrash, fill = treatment)) +
   geom_col(position = position_dodge(width = 0.8)) +
+ geom_signif(
+   annotations = "*",
+   y_position = 75,
+   xmin = 1.8,
+   xmax = 2.2,
+   tip_length = 0.02
+ )+
+  scale_x_discrete(labels = c("D1"="D1",
+                              "D2" = "D7",
+                              "D3"= "D14")) +
+   labs( title = "Thrashes between Treatments",
+        x = "Day",
+        y = "Mean Thrashes per Minute",
+        fill = "Treatment")+
+  scale_fill_manual(
+    values = c("Control" = "turquoise",
+              "Mannitol" = "turquoise4" )
+  ) +
   theme_classic()
 ```
 
@@ -43,6 +67,38 @@ ggplot(summaryThrash, aes( x = day, y = meanThrash, fill = treatment)) +
 anova_model <- aov(perMinute ~ treatment * day, data = thrash)
 summary(anova_model)
 #post hoc tukey HSD
-TukeyHSD(anova_model)
+tuk<-TukeyHSD(anova_model)
 ```
 
+```{r}
+#anova and tukey output tables
+anovaTable <- tidy(anova_model)
+kable(anovaTable,
+      digits = 4,
+      caption = "Two-way ANOVA Results for Thrashing Assay")
+
+tukTidy<- tidy(tuk)
+
+tuk_treatment_only <- tukTidy |>
+  filter(
+    str_detect(contrast, "Mannitol:D1-Control:D1") |
+    str_detect(contrast, "Mannitol:D2-Control:D2") |
+    str_detect(contrast, "Mannitol:D3-Control:D3")
+  ) |>
+  mutate(
+    Day = case_when(
+      str_detect(contrast, "D1") ~ "Day 1",
+      str_detect(contrast, "D2") ~ "Day 2",
+      str_detect(contrast, "D3") ~ "Day 3"
+    ),
+    contrast = "Mannitol vs Control"
+  ) |>
+  select(Day, contrast, estimate, conf.low, conf.high, adj.p.value)
+
+kable(
+  tuk_treatment_only,
+  digits = 4,
+  caption = "Tukey Post-hoc: Mannitol vs Control Within Each Day"
+)
+
+```
