@@ -1,0 +1,48 @@
+---
+title: "Thrashing"
+format: html
+---
+
+```{r}
+rm(list = ls())
+#import dataset and libraries needed
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+thrashing <- read_excel("data/thrashing_assay.xlsx")
+
+#view structure of each column
+str(thrashing)
+```
+
+```{r}
+#create per minute stat for each worm
+thrash<- thrashing |>
+  mutate(perMinute = ((trial1 + trial2 + trial3)/3)*2)
+```
+
+```{r}
+#create summary stats
+summaryThrash<- thrash |>
+  group_by(treatment, day) |>
+  summarise(
+    meanThrash = mean(perMinute),
+    sdThrash = sd(perMinute)
+  )
+```
+
+```{r}
+#plot results
+ggplot(summaryThrash, aes( x = day, y = meanThrash, fill = treatment)) +
+  geom_col(position = position_dodge(width = 0.8)) +
+  theme_classic()
+```
+
+```{r}
+#statistical test two way anova
+anova_model <- aov(perMinute ~ treatment * day, data = thrash)
+summary(anova_model)
+#post hoc tukey HSD
+TukeyHSD(anova_model)
+```
+
